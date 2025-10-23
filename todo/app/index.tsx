@@ -1,4 +1,3 @@
-// app/index.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -13,196 +12,276 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import api from "../services/api";
+import  api  from "../services/api"; // seu axios configurado
 
-export default function Home() {
+export default function Index() {
   const [tasks, setTasks] = useState<any[]>([]);
-  const [filter, setFilter] = useState("all");
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState("");
+  const [date, setDate] = useState("");
+  const [editingTask, setEditingTask] = useState<any | null>(null);
   const [search, setSearch] = useState("");
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editTaskId, setEditTaskId] = useState<number | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editDate, setEditDate] = useState("");
+  const [searchDate, setSearchDate] = useState(""); // 🔍 novo campo para busca por data
+  const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+  const [modalVisible, setModalVisible] = useState(false);
   const router = useRouter();
-
-  const fetchTasks = async () => {
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      api.defaults.headers.Authorization = `Token ${token}`;
-      const res = await api.get("/tasks/");
-      setTasks(res.data);
-    } catch (err: any) {
-      console.error("❌ Erro ao carregar tarefas:", err.response?.data || err.message);
-      alert("Erro ao carregar tarefas");
-    }
-  };
 
   useEffect(() => {
     fetchTasks();
   }, []);
 
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem("token");
-    router.replace("/login");
-  };
-
-  const handleComplete = async (id: number, currentStatus: boolean) => {
-    try {
-      await api.patch(`/tasks/${id}/`, { completed: !currentStatus });
-      fetchTasks();
-    } catch (err) {
-      console.error("Erro ao concluir tarefa:", err);
-      alert("Erro ao concluir tarefa");
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    const previousTasks = [...tasks];
-    setTasks((cur) => cur.filter((t) => t.id !== id));
-
+  const fetchTasks = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
-      if (!token) {
-        setTasks(previousTasks);
-        router.replace("/login");
-        return;
-      }
-
-      api.defaults.headers.Authorization = `Token ${token}`;
-      await api.delete(`/tasks/${id}/`);
-    } catch (err) {
-      console.error("Erro ao excluir tarefa:", err);
-      setTasks(previousTasks);
-      fetchTasks();
+      const response = await api.get("/tasks/", {
+        headers: { Authorization: `Token ${token}` },
+      });
+      setTasks(response.data);
+    } catch (error) {
+      console.error("Erro ao buscar tarefas:", error);
+      Alert.alert("Erro", "Não foi possível carregar as tarefas.");
     }
   };
 
-  const openEditModal = (id: number, title: string, description: string, date: string) => {
-    setEditTaskId(id);
-    setEditTitle(title);
-    setEditDescription(description || "");
-    setEditDate(date || "");
-    setEditModalVisible(true);
-  };
-
-  const saveEdit = async () => {
-    if (!editTaskId || !editTitle.trim()) {
-      alert("Título inválido");
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert("Erro", "O título é obrigatório.");
       return;
     }
 
     try {
-      await api.patch(`/tasks/${editTaskId}/`, {
-        title: editTitle,
-        description: editDescription,
-        data: editDate,
-      });
-      setEditModalVisible(false);
-      setEditTaskId(null);
-      setEditTitle("");
-      setEditDescription("");
-      setEditDate("");
+      const token = await AsyncStorage.getItem("token");
+      const data = { title, description: desc, data: date };
+
+      if (editingTask) {
+        await api.put(`/tasks/${editingTask.id}/`, data, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        Alert.alert("Sucesso", "Tarefa atualizada com sucesso!");
+      } else {
+        await api.post("/tasks/", data, {
+          headers: { Authorization: `Token ${token}` },
+        });
+        Alert.alert("Sucesso", "Tarefa criada com sucesso!");
+      }
+
+      setTitle("");
+      setDesc("");
+      setDate("");
+      setEditingTask(null);
+      setModalVisible(false);
       fetchTasks();
-    } catch (err) {
-      console.error("Erro ao editar tarefa:", err);
-      alert("Erro ao editar tarefa");
+    } catch (error) {
+      console.error("Erro ao salvar tarefa:", error);
+      Alert.alert("Erro", "Não foi possível salvar a tarefa.");
     }
   };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      await api.delete(`/tasks/${id}/`, {
+        headers: { Authorization: `Token ${token}` },
+      });
+      setTasks(tasks.filter((t) => t.id !== id));
+      Alert.alert("Sucesso", "Tarefa excluída com sucesso!");
+    } catch (error) {
+      console.error("Erro ao excluir tarefa:", error);
+      Alert.alert("Erro", "Não foi possível excluir a tarefa.");
+    }
+  };
+
+  const handleEdit = (task: any) => {
+    setEditingTask(task);
+    setTitle(task.title);
+    setDesc(task.description);
+    setDate(task.data || "");
+    setModalVisible(true);
+  };
+
+  const handleToggleComplete = async (task: any) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      await api.patch(
+        `/tasks/${task.id}/`,
+        { completed: !task.completed },
+        {
+          headers: { Authorization: `Token ${token}` },
+        }
+      );
+
+      fetchTasks();
+    } catch (error) {
+      console.error("Erro ao atualizar tarefa:", error);
+      Alert.alert("Erro", "Não foi possível atualizar o status da tarefa.");
+    }
+  };
+
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem("token");
+    router.push("/login");
+  };
+
+  // 🔍 Filtro local (título, descrição, data e status)
+  const filteredTasks = tasks
+    .filter((task) => {
+      const term = search.toLowerCase();
+      return (
+        task.title.toLowerCase().includes(term) ||
+        task.description.toLowerCase().includes(term)
+      );
+    })
+    .filter((task) =>
+      task.data
+        ? task.data.toLowerCase().includes(searchDate.toLowerCase())
+        : true
+    )
+    .filter((task) => {
+      if (filter === "completed") return task.completed === true;
+      if (filter === "pending") return task.completed === false;
+      return true;
+    });
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Minhas Tarefas</Text>
 
-      <View style={styles.filters}>
-        <Button title="Todos" onPress={() => setFilter("all")} />
-        <Button title="Pendentes" onPress={() => setFilter("pending")} />
-        <Button title="Concluídos" onPress={() => setFilter("done")} />
+      {/* 🔘 Botões de filtro */}
+      <View style={styles.filterRow}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === "all" && styles.filterButtonActive,
+          ]}
+          onPress={() => setFilter("all")}
+        >
+          <Text style={styles.filterText}>Todas</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === "pending" && styles.filterButtonActive,
+          ]}
+          onPress={() => setFilter("pending")}
+        >
+          <Text style={styles.filterText}>Pendentes</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === "completed" && styles.filterButtonActive,
+          ]}
+          onPress={() => setFilter("completed")}
+        >
+          <Text style={styles.filterText}>Concluídas</Text>
+        </TouchableOpacity>
       </View>
 
+      {/* 🔎 Campo de busca por título/descrição */}
       <TextInput
-        placeholder="Buscar tarefas..."
+        placeholder="Buscar por título ou descrição..."
         style={styles.input}
         value={search}
         onChangeText={setSearch}
       />
 
+      {/* 🗓️ Campo de busca por data */}
+      <TextInput
+        placeholder="Buscar por data..."
+        style={styles.input}
+        value={searchDate}
+        onChangeText={setSearchDate}
+      />
+
+      {/* Lista de tarefas */}
       <FlatList
-        data={tasks.filter((t) => {
-          if (filter === "pending") return !t.completed;
-          if (filter === "done") return t.completed;
-          return true;
-        })}
+        data={filteredTasks}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.taskItem}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.taskText, item.completed && styles.taskDone]}>
+          <View
+            style={[
+              styles.taskCard,
+              item.completed && { backgroundColor: "#DFF0D8" },
+            ]}
+          >
+            <View style={styles.taskHeader}>
+              <Text
+                style={[
+                  styles.taskTitle,
+                  item.completed && { textDecorationLine: "line-through" },
+                ]}
+              >
                 {item.title}
               </Text>
-              {item.description ? <Text style={styles.taskDesc}>{item.description}</Text> : null}
             </View>
+            <Text style={styles.taskDesc}>{item.description}</Text>
+            {item.data && <Text style={styles.taskDate}>{item.data}</Text>}
 
-            <View style={styles.actions}>
+            {/* Botões alinhados à direita */}
+            <View style={styles.actionButtons}>
               <TouchableOpacity
-                onPress={() => openEditModal(item.id, item.title, item.description, item.data)}
+                onPress={() => handleToggleComplete(item)}
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: item.completed ? "#FFC107" : "#4CAF50",
+                  },
+                ]}
               >
-                <Text style={styles.edit}>✏️</Text>
+                <Text style={styles.buttonText}>
+                  {item.completed ? "↺" : "✓"}
+                </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                <Text style={styles.delete}>🗑️</Text>
+              <TouchableOpacity
+                onPress={() => handleEdit(item)}
+                style={[styles.actionBtn, { backgroundColor: "#2196F3" }]}
+              >
+                <Text style={styles.buttonText}>✎</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => handleComplete(item.id, item.completed)}>
-                <Text style={styles.complete}>✅</Text>
+              <TouchableOpacity
+                onPress={() => handleDelete(item.id)}
+                style={[styles.actionBtn, { backgroundColor: "#F44336" }]}
+              >
+                <Text style={styles.buttonText}>🗑</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
       />
 
-      <TouchableOpacity style={styles.addButton} onPress={() => router.push("/TaskForm")}>
-        <Text style={styles.addButtonText}>+</Text>
-      </TouchableOpacity>
+      <Button title="Nova Tarefa" onPress={() => setModalVisible(true)} />
+        <br/>
+      <Button title="Sair" onPress={handleLogout} color="#666" />
 
-      <Button title="Sair" onPress={handleLogout} />
-
-      {/* Modal de edição */}
-      <Modal visible={editModalVisible} animationType="slide" transparent>
+      {/* Modal */}
+      <Modal visible={modalVisible} animationType="slide">
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Editar tarefa</Text>
+          <Text style={styles.modalTitle}>
+            {editingTask ? "Editar Tarefa" : "Nova Tarefa"}
+          </Text>
 
-            <TextInput
-              style={styles.modalInput}
-              value={editTitle}
-              onChangeText={setEditTitle}
-              placeholder="Título"
-            />
-            <TextInput
-              style={styles.modalInput}
-              value={editDescription}
-              onChangeText={setEditDescription}
-              placeholder="Descrição"
-            />
-            <TextInput
-              style={styles.modalInput}
-              value={editDate}
-              onChangeText={setEditDate}
-              placeholder="Data (YYYY-MM-DD)"
-            />
+          <TextInput
+            placeholder="Título"
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+          />
+          <TextInput
+            placeholder="Descrição"
+            style={styles.input}
+            value={desc}
+            onChangeText={setDesc}
+          />
+          <TextInput
+            placeholder="Data (opcional)"
+            style={styles.input}
+            value={date}
+            onChangeText={setDate}
+          />
 
-            <View style={styles.modalButtons}>
-              <Button title="Cancelar" onPress={() => setEditModalVisible(false)} />
-              <Button title="Salvar" onPress={saveEdit} />
-            </View>
-          </View>
+          <Button title="Salvar" onPress={handleSave} />
+          <br/>
+          <Button title="Cancelar" onPress={() => setModalVisible(false)} />
         </View>
       </Modal>
     </View>
@@ -210,41 +289,77 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
-  filters: { flexDirection: "row", justifyContent: "space-around", marginVertical: 10 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, marginBottom: 10 },
-  taskItem: {
+  container: { flex: 1, padding: 16, backgroundColor: "#F2F2F2" },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    backgroundColor: "#fff",
+  },
+  filterRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 10,
+  },
+  filterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: "#ddd",
+  },
+  filterButtonActive: {
+    backgroundColor: "#2196F3",
+  },
+  filterText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  taskCard: {
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+    elevation: 2,
+  },
+  taskHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
   },
-  taskText: { fontSize: 18, flex: 1 },
-  taskDesc: { fontSize: 14, color: "#555" },
-  taskDate: { fontSize: 14, color: "#555" },
-  taskDone: { textDecorationLine: "line-through", color: "#999" },
-  actions: { flexDirection: "row", gap: 10, marginLeft: 10 },
-  edit: { fontSize: 20, marginHorizontal: 5 },
-  delete: { fontSize: 20, marginHorizontal: 5 },
-  complete: { fontSize: 20, marginHorizontal: 5 },
-  addButton: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-    backgroundColor: "#007AFF",
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  taskTitle: { fontSize: 18, fontWeight: "bold" },
+  taskDesc: { color: "#666", marginTop: 4 },
+  taskDate: { color: "#999", fontSize: 12, marginTop: 4 },
+  actionButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 8,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    marginLeft: 8,
     justifyContent: "center",
     alignItems: "center",
   },
-  addButtonText: { fontSize: 30, color: "#fff", fontWeight: "bold" },
-  modalContainer: { flex: 1, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", padding: 20 },
-  modalContent: { backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 5 },
-  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
-  modalInput: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, marginBottom: 20 },
-  modalButtons: { flexDirection: "row", justifyContent: "space-around" },
+  buttonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#F9F9F9",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
 });
