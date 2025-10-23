@@ -5,10 +5,14 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter, useLocalSearchParams } from "expo-router";
 
+
 export default function TaskForm() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [data, setDate] = useState("");
+
 
   // Carregar tarefa existente se estiver editando
   useEffect(() => {
@@ -27,6 +31,8 @@ export default function TaskForm() {
       });
 
       setTitle(res.data.title);
+      setDescription(res.data.description);
+      setDate(res.data.data);
     } catch (error) {
       console.log(error);
       alert("Erro ao carregar tarefa.");
@@ -49,7 +55,7 @@ export default function TaskForm() {
         // Criar tarefa
         await axios.post(
           "http://127.0.0.1:8000/api/tasks/",
-          { title },
+          { title , description, data},
           { headers: { Authorization: `Token ${token}` } }
         );
       }
@@ -68,6 +74,18 @@ export default function TaskForm() {
         style={styles.input}
         value={title}
         onChangeText={setTitle}
+      />
+      <TextInput
+        placeholder="Descrição da tarefa"
+        style={styles.input}
+        value={description}
+        onChangeText={setDescription}
+      />
+       <TextInput
+        placeholder="Data da tarefa (YYYY-MM-DD)"
+        style={styles.input}
+        value={data}
+        onChangeText={setDate}
       />
       <Button title="Salvar" onPress={saveTask} />
     </View>
